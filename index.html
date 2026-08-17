@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time tracking · weekly</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EAEDF1;
+    --surface:#FFFFFF;
+    --surface-2:#F4F6F9;
+    --ink:#14212B;
+    --muted:#6A7682;
+    --line:#E1E6EC;
+    --accent:#0F6E6E;
+    --over:#C7443E;
+    --ok:#1F8A5B;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(20,33,43,.04), 0 8px 24px rgba(20,33,43,.06);
+    --display:"Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+    --body:"Inter", ui-sans-serif, system-ui, sans-serif;
+    --mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--body);
+    font-size:15px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding:24px 16px 64px;
+  }
+  .wrap{max-width:720px;margin:0 auto}
+
+  /* Header */
+  header{margin-bottom:20px}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 6px;
+  }
+  h1{
+    font-family:var(--display);
+    font-weight:700;
+    font-size:30px;
+    line-height:1.05;
+    margin:0;
+    letter-spacing:-.01em;
+  }
+  .sub{color:var(--muted);margin:6px 0 0;font-size:14px}
+
+  /* Week nav */
+  .weekbar{
+    display:flex;align-items:center;gap:10px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:10px 12px;
+    margin:18px 0;
+  }
+  .navbtn{
+    flex:none;
+    width:38px;height:38px;
+    border:1px solid var(--line);
+    background:var(--surface-2);
+    border-radius:10px;
+    font-size:18px;line-height:1;
+    color:var(--ink);
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:background .12s, border-color .12s;
+  }
+  .navbtn:hover{background:#EAF0F0;border-color:#CFDBDB}
+  .weekmeta{flex:1 1 auto;min-width:0;text-align:center}
+  .weeknum{
+    font-family:var(--mono);
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);
+  }
+  .weekrange{
+    font-family:var(--display);
+    font-weight:500;font-size:17px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .today-link{
+    flex:none;
+    font-size:12px;font-weight:500;
+    color:var(--accent);
+    background:none;border:none;cursor:pointer;
+    padding:6px 8px;border-radius:8px;
+  }
+  .today-link:hover{background:var(--surface-2)}
+  .today-link[hidden]{display:none}
+
+  /* Project cards */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:16px;
+    margin-bottom:12px;
+  }
+  .card-top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .dot{flex:none;width:11px;height:11px;border-radius:50%}
+  .pname{font-family:var(--display);font-weight:500;font-size:16px;flex:1 1 auto;min-width:0;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stepper{display:flex;align-items:center;gap:6px;flex:none}
+  .step{
+    width:32px;height:32px;flex:none;
+    border:1px solid var(--line);background:var(--surface-2);
+    border-radius:8px;font-size:17px;line-height:1;color:var(--ink);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .step:hover{background:#EAF0F0}
+  .hinput{
+    width:64px;text-align:center;
+    font-family:var(--mono);font-weight:700;font-size:16px;
+    border:1px solid var(--line);border-radius:8px;
+    padding:6px 4px;color:var(--ink);background:var(--surface);
+  }
+  .hinput:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  .unit{font-family:var(--mono);font-size:13px;color:var(--muted)}
+
+  .bar{
+    height:10px;border-radius:6px;background:var(--surface-2);
+    overflow:hidden;border:1px solid var(--line);
+  }
+  .fill{height:100%;border-radius:6px 0 0 6px;transition:width .25s ease}
+  .card-bottom{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:9px}
+  .target-lbl{font-size:13px;color:var(--muted)}
+  .chip{
+    font-family:var(--mono);font-size:12px;font-weight:500;
+    padding:2px 8px;border-radius:999px;white-space:nowrap;
+  }
+  .chip.left{background:var(--surface-2);color:var(--muted)}
+  .chip.ok{background:rgba(31,138,91,.12);color:var(--ok)}
+  .chip.over{background:rgba(199,68,62,.12);color:var(--over)}
+
+  .ptotal{font-family:var(--mono);font-weight:700;font-size:16px;flex:none;color:var(--ink)}
+  .sessions{margin-top:13px;border-top:1px solid var(--line);padding-top:11px}
+  .no-sessions{color:var(--muted);font-size:12.5px;padding:1px 0 2px}
+  .session{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
+  .session .day{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .session .time{font-family:var(--mono);color:var(--muted);white-space:nowrap}
+  .session .dur{font-family:var(--mono);font-weight:700;width:54px;text-align:right}
+  .session .rm{width:26px;height:26px;flex:none;border:1px solid var(--line);background:var(--surface-2);border-radius:7px;color:var(--over);cursor:pointer;font-size:12px;line-height:1}
+  .session .rm:hover{background:#FBEDEC}
+  .addrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:11px}
+  .addrow select,.addrow input[type=time]{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 8px;color:var(--ink);background:var(--surface);font-family:var(--body)}
+  .addrow input[type=time]{font-family:var(--mono)}
+  .addrow select:focus,.addrow input[type=time]:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  .addrow .dash{color:var(--muted)}
+  .addrow .addbtn{font-family:var(--body);font-size:13px;font-weight:500;padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+  .addrow .addbtn:hover{background:#0c5c5c}
+
+  /* Total */
+  .total{
+    background:var(--ink);color:#fff;border:none;
+    padding:18px;
+  }
+  .total .row1{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+  .total .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.7}
+  .total .big{font-family:var(--mono);font-weight:700;font-size:22px}
+  .total .big .of{opacity:.55;font-weight:500;font-size:16px}
+  .stackbar{
+    position:relative;height:16px;border-radius:8px;
+    background:rgba(255,255,255,.12);overflow:hidden;display:flex;
+  }
+  .seg{height:100%;transition:width .25s ease}
+  .marker{
+    position:absolute;top:-3px;bottom:-3px;width:2px;
+    background:#fff;opacity:.85;
+  }
+  .marker::after{
+    content:"target";position:absolute;top:-16px;left:50%;transform:translateX(-50%);
+    font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;opacity:.7;
+  }
+  .total .foot{display:flex;justify-content:space-between;margin-top:10px;font-size:12px;opacity:.75}
+
+  /* Actions */
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}
+  .btn{
+    font-family:var(--body);font-size:13px;font-weight:500;
+    padding:9px 14px;border-radius:10px;cursor:pointer;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  }
+  .btn:hover{background:var(--surface-2)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:#0c5c5c}
+
+  /* Editor + history panels */
+  .panel{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:16px;margin-bottom:12px;
+  }
+  .panel h2{font-family:var(--display);font-weight:500;font-size:16px;margin:0 0 14px}
+  .panel[hidden]{display:none}
+  .edit-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .swatch{width:26px;height:26px;flex:none;border-radius:7px;border:1px solid rgba(0,0,0,.12);cursor:pointer;padding:0}
+  .edit-name{flex:1 1 auto;min-width:0;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:14px;font-family:var(--body);color:var(--ink)}
+  .edit-name:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .edit-target{width:62px;flex:none;text-align:center;font-family:var(--mono);border:1px solid var(--line);border-radius:8px;padding:7px 4px;color:var(--ink)}
+  .edit-target:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .del{width:32px;height:32px;flex:none;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;color:var(--over);cursor:pointer;font-size:16px}
+  .del:hover{background:#FBEDEC}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+  td.num{font-family:var(--mono)}
+  tr.current td{background:var(--surface-2)}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:14px 0}
+
+  .notice{
+    background:#FFF4E5;border:1px solid #F0D9A8;color:#7a5a10;
+    border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:14px;
+  }
+  .notice[hidden]{display:none}
+
+  /* Lock screen */
+  .lock{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .lock[hidden]{display:none}
+  .lock-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px 24px;width:100%;max-width:360px}
+  .lock-card .eyebrow{text-align:center}
+  .lock-card h1{text-align:center;font-size:24px;margin:2px 0 4px}
+  .lock-sub{color:var(--muted);font-size:13px;text-align:center;margin:0 0 18px}
+  .lock-input{width:100%;font-family:var(--mono);font-size:18px;letter-spacing:.12em;text-align:center;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;color:var(--ink);background:var(--surface)}
+  .lock-input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  .lock-input[hidden]{display:none}
+  .lock-err{color:var(--over);font-size:12.5px;min-height:16px;text-align:center;margin-bottom:8px}
+  .lock-reset{display:block;width:100%;margin-top:14px;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer}
+  .lock-reset:hover{color:var(--over)}
+  .lock-reset[hidden]{display:none}
+
+  footer{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.55}
+  footer code{font-family:var(--mono);background:var(--surface);padding:1px 5px;border-radius:5px;border:1px solid var(--line)}
+  input[type=file]{display:none}
+
+  @media (max-width:480px){
+    h1{font-size:25px}
+    .hinput{width:56px}
+    .pname{font-size:15px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="lock" id="lock" hidden>
+  <div class="lock-card">
+    <p class="eyebrow">Time tracking</p>
+    <h1 id="lockTitle">Enter passcode</h1>
+    <p class="lock-sub" id="lockSub">Unlock to see your hours.</p>
+    <input class="lock-input" id="lockPass" type="password" inputmode="numeric" autocomplete="off" placeholder="Passcode">
+    <input class="lock-input" id="lockPass2" type="password" autocomplete="off" placeholder="Repeat passcode" hidden>
+    <div class="lock-err" id="lockErr"></div>
+    <button class="btn primary" id="lockBtn" style="width:100%;justify-content:center">Unlock</button>
+    <button class="lock-reset" id="lockReset" type="button">Forgot code? Reset &amp; erase data</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Time tracking</p>
+    <h1>Weekly tracker</h1>
+    <p class="sub">Log hours per project each week. Everything stays in your browser.</p>
+  </header>
+
+  <div class="weekbar">
+    <button class="navbtn" id="prev" aria-label="Previous week"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"/></svg></button>
+    <div class="weekmeta">
+      <div class="weeknum" id="weeknum">—</div>
+      <div class="weekrange" id="weekrange">—</div>
+    </div>
+    <button class="today-link" id="today" hidden>This week</button>
+    <button class="navbtn" id="next" aria-label="Next week"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></button>
+  </div>
+
+  <div id="projects"></div>
+
+  <div class="card total">
+    <div class="row1">
+      <span class="lbl">This week total</span>
+      <span class="big"><span id="totalLogged">0</span><span class="of"> / <span id="totalTarget">0</span>h</span></span>
+    </div>
+    <div class="stackbar" id="stackbar"></div>
+    <div class="foot"><span id="totalStatus">—</span><span id="totalPct">0%</span></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn" id="editBtn">⚙ Edit projects</button>
+    <button class="btn" id="histBtn">History</button>
+    <button class="btn" id="csvBtn">Export CSV</button>
+    <button class="btn" id="jsonBtn">Backup</button>
+    <button class="btn" id="importBtn">Restore</button>
+    <input type="file" id="importFile" accept="application/json,.json">
+    <button class="btn" id="lockNow">Lock</button>
+  </div>
+
+  <div class="panel" id="editor" hidden>
+    <h2>Projects &amp; targets</h2>
+    <div id="editList"></div>
+    <button class="btn" id="addProj" style="margin-top:4px">+ Add project</button>
+    <button class="btn" id="changePass" style="margin-top:4px;margin-left:8px">Change passcode</button>
+    <button class="btn primary" id="editDone" style="margin-top:4px;margin-left:8px">Done</button>
+  </div>
+
+  <div class="panel" id="history" hidden>
+    <h2>Weekly history</h2>
+    <div id="histBody"></div>
+  </div>
+
+  <footer>
+    Data lives in your browser's <code>localStorage</code>. Make a Backup now and then —
+    you can Restore it on another device. To run it yourself: put <code>index.html</code>
+    in a repo and enable GitHub Pages (Settings → Pages).
+  </footer>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var STORAGE_KEY = "time-tracker-v1";
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var PALETTE = ["#0F6E6E","#6B4FE0","#C77A00","#C7443E","#2E7D32","#0E6BA8","#B0338C","#3C5A99"];
+
+  // ---- secure storage (passcode-encrypted at rest) ----
+  var SECURE_KEY = "time-tracker-secure";
+  var OLD_KEY = STORAGE_KEY;   // legacy plaintext, migrated on first setup
+  var ITER = 150000;
+  var cryptoKey = null;        // in-memory session key (never stored)
+  var saltBytes = null;
+  var data = null;             // populated only after unlock
+
+  var subtle = (window.crypto && window.crypto.subtle) ? window.crypto.subtle : null;
+  var te = new TextEncoder(), td = new TextDecoder();
+  function b64(buf){ var b=new Uint8Array(buf), s=""; for(var i=0;i<b.length;i++) s+=String.fromCharCode(b[i]); return btoa(s); }
+  function unb64(str){ var s=atob(str), a=new Uint8Array(s.length); for(var i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; }
+
+  function deriveKey(passcode, salt, iter){
+    return subtle.importKey("raw", te.encode(passcode), "PBKDF2", false, ["deriveKey"])
+      .then(function(base){
+        return subtle.deriveKey(
+          {name:"PBKDF2", salt:salt, iterations:iter, hash:"SHA-256"},
+          base, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+      });
+  }
+  function hasVault(){ try{ return !!localStorage.getItem(SECURE_KEY); }catch(e){ return false; } }
+  function legacyData(){ try{ var o=JSON.parse(localStorage.getItem(OLD_KEY)); return (o&&o.projects)?o:null; }catch(e){ return null; } }
+
+  var saveChain = Promise.resolve();
+  function save(){
+    if(!cryptoKey) return;
+    var snapshot = JSON.stringify(data);
+    saveChain = saveChain.then(function(){
+      var iv = window.crypto.getRandomValues(new Uint8Array(12));
+      return subtle.encrypt({name:"AES-GCM", iv:iv}, cryptoKey, te.encode(snapshot)).then(function(ct){
+        var blob = {v:1, salt:b64(saltBytes), iter:ITER, iv:b64(iv), ct:b64(ct)};
+        try{ localStorage.setItem(SECURE_KEY, JSON.stringify(blob)); }catch(e){}
+      });
+    }).catch(function(){});
+  }
+
+  // ---- default data ----
+  function defaultData(){
+    return {
+      version:1,
+      projects:[
+        {id:"p1", name:"BridjeLab", target:5, color:PALETTE[0]},
+        {id:"p2", name:"Design thinking SAAS", target:7, color:PALETTE[1]},
+        {id:"p3", name:"VR Game", target:7, color:PALETTE[2]}
+      ],
+      entries:{}
+    };
+  }
+  function unlock(passcode){
+    var blob; try{ blob=JSON.parse(localStorage.getItem(SECURE_KEY)); }catch(e){ return Promise.resolve(false); }
+    saltBytes = unb64(blob.salt); ITER = blob.iter;
+    return deriveKey(passcode, saltBytes, ITER).then(function(key){
+      return subtle.decrypt({name:"AES-GCM", iv:unb64(blob.iv)}, key, unb64(blob.ct)).then(function(pt){
+        data = JSON.parse(td.decode(pt)); cryptoKey = key; return true;
+      });
+    }).catch(function(){ return false; });
+  }
+  function setupPasscode(passcode){
+    saltBytes = window.crypto.getRandomValues(new Uint8Array(16)); ITER = 150000;
+    return deriveKey(passcode, saltBytes, ITER).then(function(key){
+      cryptoKey = key;
+      data = legacyData() || defaultData();
+      save();
+      try{ localStorage.removeItem(OLD_KEY); }catch(e){}
+      return true;
+    });
+  }
+  function changePasscode(passcode){
+    saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
+    return deriveKey(passcode, saltBytes, ITER).then(function(key){ cryptoKey = key; save(); return true; });
+  }
+
+  // ---- date helpers ----
+  function mondayOf(d){
+    var x=new Date(d); x.setHours(0,0,0,0);
+    var day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); return x;
+  }
+  function isoWeek(d){
+    var date=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+    var dn=(date.getUTCDay()+6)%7; date.setUTCDate(date.getUTCDate()-dn+3);
+    var ft=new Date(Date.UTC(date.getUTCFullYear(),0,4));
+    var fdn=(ft.getUTCDay()+6)%7; ft.setUTCDate(ft.getUTCDate()-fdn+3);
+    var wk=1+Math.round((date-ft)/(7*864e5));
+    return {year:date.getUTCFullYear(), week:wk};
+  }
+  function pad(n){return n<10?"0"+n:""+n;}
+  function keyOf(monday){return monday.getFullYear()+"-"+pad(monday.getMonth()+1)+"-"+pad(monday.getDate());}
+  function rangeLabel(monday){
+    var sun=new Date(monday); sun.setDate(sun.getDate()+6);
+    var a=monday.getDate()+" "+MONTHS[monday.getMonth()];
+    var b=sun.getDate()+" "+MONTHS[sun.getMonth()];
+    return a+" – "+b+" "+sun.getFullYear();
+  }
+
+  var current = mondayOf(new Date());
+
+  // ---- number format ----
+  function fmt(n){ if(n==null||isNaN(n))return "0"; return (Math.round(n*100)/100).toString(); }
+  function parseNum(v){ var n=parseFloat(String(v).replace(",",".")); return isNaN(n)?0:Math.max(0,n); }
+
+  function entriesFor(key){ return data.entries[key] || {}; }
+
+  // ---- time / session helpers ----
+  var WD=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  function weekDays(monday){ var a=[]; for(var i=0;i<7;i++){ var d=new Date(monday); d.setDate(d.getDate()+i); a.push(d); } return a; }
+  function dateKey(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function dayLabel(d){ return WD[(d.getDay()+6)%7]+" "+d.getDate()+" "+MONTHS[d.getMonth()]; }
+  function minutesOf(t){ var p=String(t).split(":"); return (+p[0])*60+(+p[1]); }
+  function sessionHours(s){ var m=minutesOf(s.e)-minutesOf(s.s); if(m<0) m+=1440; return m/60; }
+  function sessionsFor(ent,pid){ return Array.isArray(ent[pid]) ? ent[pid] : []; }
+  function projectHours(ent,pid){
+    var v=ent[pid]; if(v==null) return 0;
+    if(typeof v==="number") return v;               // legacy safety
+    return v.reduce(function(t,s){ return t+sessionHours(s); },0);
+  }
+  function addSession(key,pid,day,s,e){
+    if(!data.entries[key]) data.entries[key]={};
+    if(!Array.isArray(data.entries[key][pid])) data.entries[key][pid]=[];
+    data.entries[key][pid].push({d:day,s:s,e:e});
+    data.entries[key][pid].sort(function(a,b){ return (a.d+a.s)<(b.d+b.s)?-1:1; });
+    save();
+  }
+  function removeSession(key,pid,idx){
+    var arr=data.entries[key] && data.entries[key][pid];
+    if(!Array.isArray(arr)) return;
+    arr.splice(idx,1);
+    if(arr.length===0) delete data.entries[key][pid];
+    if(data.entries[key] && Object.keys(data.entries[key]).length===0) delete data.entries[key];
+    save();
+  }
+  function totalTarget(){ return data.projects.reduce(function(s,p){return s+(+p.target||0);},0); }
+
+  // ---- render ----
+  var elProjects=document.getElementById("projects");
+  function render(){
+    var key=keyOf(current);
+    var iw=isoWeek(current);
+    document.getElementById("weeknum").textContent="Week "+iw.week+" · "+iw.year;
+    document.getElementById("weekrange").textContent=rangeLabel(current);
+    document.getElementById("today").hidden = (key===keyOf(mondayOf(new Date())));
+
+    var ent=entriesFor(key);
+    var days=weekDays(current);
+    var todayK=dateKey(new Date());
+    var optHtml=days.map(function(d){ var k=dateKey(d); return '<option value="'+k+'"'+(k===todayK?' selected':'')+'>'+dayLabel(d)+'</option>'; }).join("");
+
+    elProjects.innerHTML="";
+    data.projects.forEach(function(p){
+      var logged=projectHours(ent,p.id), target=+p.target||0;
+      var diff=logged-target;
+      var pct= target>0 ? Math.min(logged/target,1)*100 : (logged>0?100:0);
+      var over= diff>0.001;
+      var sessions=sessionsFor(ent,p.id);
+
+      var sHtml="";
+      if(sessions.length===0){ sHtml='<div class="no-sessions">No sessions logged this week.</div>'; }
+      else {
+        sessions.forEach(function(s,i){
+          var d=new Date(s.d+"T00:00:00");
+          sHtml+='<div class="session">'+
+            '<span class="day">'+dayLabel(d)+'</span>'+
+            '<span class="time">'+s.s+'–'+s.e+'</span>'+
+            '<span class="dur">'+fmt(sessionHours(s))+'h</span>'+
+            '<button class="rm" data-i="'+i+'" title="Remove">✕</button>'+
+          '</div>';
+        });
+      }
+
+      var card=document.createElement("div"); card.className="card";
+      card.innerHTML=
+        '<div class="card-top">'+
+          '<span class="dot" style="background:'+p.color+'"></span>'+
+          '<span class="pname">'+esc(p.name)+'</span>'+
+          '<span class="ptotal">'+fmt(logged)+'h</span>'+
+        '</div>'+
+        '<div class="bar"><div class="fill" style="width:'+pct+'%;background:'+(over?"var(--over)":p.color)+'"></div></div>'+
+        '<div class="card-bottom">'+
+          '<span class="target-lbl">target '+fmt(target)+'h</span>'+
+          '<span class="chip '+(over?"over":(Math.abs(diff)<0.001&&logged>0?"ok":"left"))+'">'+
+            (over? "+"+fmt(diff)+"h over" : (Math.abs(diff)<0.001&&logged>0? "on target" : fmt(-diff)+"h left"))+
+          '</span>'+
+        '</div>'+
+        '<div class="sessions">'+sHtml+
+          '<div class="addrow">'+
+            '<select class="s-day">'+optHtml+'</select>'+
+            '<input class="s-start" type="time" step="900" aria-label="Start time">'+
+            '<span class="dash">–</span>'+
+            '<input class="s-end" type="time" step="900" aria-label="End time">'+
+            '<button class="addbtn" type="button">Add</button>'+
+          '</div>'+
+        '</div>';
+
+      Array.prototype.forEach.call(card.querySelectorAll(".rm"),function(btn){
+        btn.addEventListener("click",function(){ removeSession(key,p.id,+btn.getAttribute("data-i")); render(); refreshHistory(); });
+      });
+      card.querySelector(".addbtn").addEventListener("click",function(){
+        var day=card.querySelector(".s-day").value;
+        var s=card.querySelector(".s-start").value;
+        var e=card.querySelector(".s-end").value;
+        if(!s||!e){ alert("Enter both a start and an end time."); return; }
+        addSession(key,p.id,day,s,e); render(); refreshHistory();
+      });
+      elProjects.appendChild(card);
+    });
+
+    renderTotal(ent);
+  }
+
+  function renderTotal(ent){
+    var tgt=totalTarget();
+    var logged=data.projects.reduce(function(s,p){return s+projectHours(ent,p.id);},0);
+    document.getElementById("totalLogged").textContent=fmt(logged);
+    document.getElementById("totalTarget").textContent=fmt(tgt);
+    document.getElementById("totalPct").textContent=(tgt>0?Math.round(logged/tgt*100):0)+"%";
+
+    var diff=logged-tgt;
+    var st=document.getElementById("totalStatus");
+    if(logged===0) st.textContent="Nothing logged";
+    else if(diff>0.001) st.textContent="Overtime +"+fmt(diff)+"h";
+    else if(Math.abs(diff)<0.001) st.textContent="Right on plan";
+    else st.textContent=fmt(-diff)+"h left";
+
+    var denom=Math.max(tgt,logged)||1;
+    var sb=document.getElementById("stackbar"); sb.innerHTML="";
+    data.projects.forEach(function(p){
+      var h=projectHours(ent,p.id); if(h<=0) return;
+      var seg=document.createElement("div");
+      seg.className="seg"; seg.style.width=(h/denom*100)+"%"; seg.style.background=p.color;
+      seg.title=p.name+": "+fmt(h)+"h";
+      sb.appendChild(seg);
+    });
+    if(tgt>0 && tgt<denom){
+      var m=document.createElement("div"); m.className="marker"; m.style.left=(tgt/denom*100)+"%";
+      sb.appendChild(m);
+    }
+  }
+
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+  // ---- navigation ----
+  document.getElementById("prev").onclick=function(){ current.setDate(current.getDate()-7); current=new Date(current); render(); };
+  document.getElementById("next").onclick=function(){ current.setDate(current.getDate()+7); current=new Date(current); render(); };
+  document.getElementById("today").onclick=function(){ current=mondayOf(new Date()); render(); };
+
+  // ---- editor ----
+  var editor=document.getElementById("editor"), editList=document.getElementById("editList");
+  document.getElementById("editBtn").onclick=function(){ editor.hidden=!editor.hidden; if(!editor.hidden){history.hidden=true; buildEditor();} };
+  document.getElementById("editDone").onclick=function(){ editor.hidden=true; render(); };
+  document.getElementById("addProj").onclick=function(){
+    var used=data.projects.map(function(p){return p.color;});
+    var color=PALETTE.filter(function(c){return used.indexOf(c)<0;})[0]||PALETTE[data.projects.length%PALETTE.length];
+    data.projects.push({id:"p"+Date.now(), name:"New project", target:0, color:color});
+    save(); buildEditor(); render();
+  };
+  function buildEditor(){
+    editList.innerHTML="";
+    data.projects.forEach(function(p,idx){
+      var row=document.createElement("div"); row.className="edit-row";
+      row.innerHTML=
+        '<button class="swatch" style="background:'+p.color+'" title="Change color"></button>'+
+        '<input class="edit-name" value="'+esc(p.name)+'">'+
+        '<input class="edit-target" type="number" step="0.25" min="0" value="'+p.target+'">'+
+        '<span class="unit">h</span>'+
+        '<button class="del" title="Delete">✕</button>';
+      row.querySelector(".edit-name").addEventListener("input",function(e){ p.name=e.target.value; save(); });
+      row.querySelector(".edit-target").addEventListener("input",function(e){ p.target=parseNum(e.target.value); save(); render(); });
+      row.querySelector(".swatch").addEventListener("click",function(){
+        var ci=PALETTE.indexOf(p.color); p.color=PALETTE[(ci+1)%PALETTE.length];
+        this.style.background=p.color; save(); render();
+      });
+      row.querySelector(".del").addEventListener("click",function(){
+        if(data.projects.length<=1){ alert("You need at least one project."); return; }
+        if(!confirm("Delete \""+p.name+"\"? Hours logged for it will be removed too.")) return;
+        data.projects.splice(idx,1);
+        Object.keys(data.entries).forEach(function(k){ delete data.entries[k][p.id];
+          if(Object.keys(data.entries[k]).length===0) delete data.entries[k]; });
+        save(); buildEditor(); render(); refreshHistory();
+      });
+      editList.appendChild(row);
+    });
+  }
+
+  // ---- history ----
+  var history=document.getElementById("history"), histBody=document.getElementById("histBody");
+  document.getElementById("histBtn").onclick=function(){ history.hidden=!history.hidden; if(!history.hidden){editor.hidden=true; refreshHistory();} };
+  function sortedWeeks(){ return Object.keys(data.entries).sort().reverse(); }
+  function refreshHistory(){
+    if(history.hidden) return;
+    var weeks=sortedWeeks();
+    if(weeks.length===0){ histBody.innerHTML='<div class="empty">No weeks logged yet.</div>'; return; }
+    var html='<table><thead><tr><th>Week</th>';
+    data.projects.forEach(function(p){ html+='<th>'+esc(shortName(p.name))+'</th>'; });
+    html+='<th>Total</th></tr></thead><tbody>';
+    var curKey=keyOf(current);
+    weeks.forEach(function(k){
+      var d=new Date(k+"T00:00:00"); var iw=isoWeek(d);
+      var ent=data.entries[k]; var tot=0;
+      html+='<tr class="'+(k===curKey?"current":"")+'"><td>#'+iw.week+' · '+d.getDate()+" "+MONTHS[d.getMonth()]+'</td>';
+      data.projects.forEach(function(p){ var h=projectHours(ent,p.id); tot+=h; html+='<td class="num">'+(h?fmt(h):"·")+'</td>'; });
+      html+='<td class="num"><strong>'+fmt(tot)+'</strong></td></tr>';
+    });
+    html+='</tbody></table>';
+    histBody.innerHTML=html;
+  }
+  function shortName(n){ return n.length>10 ? n.slice(0,9)+"…" : n; }
+
+  // ---- export / import ----
+  function download(name, content, type){
+    var blob=new Blob([content],{type:type});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a"); a.href=url; a.download=name; a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},500);
+  }
+  function csvCell(v){ v=String(v); return /[",\n;]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+  document.getElementById("csvBtn").onclick=function(){
+    var rows=[];
+    Object.keys(data.entries).forEach(function(k){
+      var ent=data.entries[k];
+      data.projects.forEach(function(p){
+        sessionsFor(ent,p.id).forEach(function(s){
+          var d=new Date(s.d+"T00:00:00"); var iw=isoWeek(d);
+          rows.push([iw.year+"-W"+pad(iw.week), s.d, WD[(d.getDay()+6)%7], p.name, s.s, s.e, fmt(sessionHours(s))]);
+        });
+      });
+    });
+    rows.sort(function(a,b){ return (a[1]+a[4])<(b[1]+b[4])?-1:1; });
+    rows.unshift(["ISO week","Date","Weekday","Project","Start","End","Hours"]);
+    var csv="\uFEFF"+rows.map(function(r){return r.map(csvCell).join(",");}).join("\n");
+    download("time-tracking.csv", csv, "text/csv;charset=utf-8");
+  };
+  document.getElementById("jsonBtn").onclick=function(){
+    download("time-tracking-backup.json", JSON.stringify(data,null,2), "application/json");
+  };
+  document.getElementById("importBtn").onclick=function(){ document.getElementById("importFile").click(); };
+  document.getElementById("importFile").addEventListener("change",function(e){
+    var f=e.target.files[0]; if(!f) return;
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var obj=JSON.parse(r.result);
+        if(!obj.projects||!obj.entries) throw new Error("bad");
+        if(!confirm("Replace current data with the file's contents?")) return;
+        data=obj; save(); buildEditor(); render(); refreshHistory();
+      }catch(err){ alert("Couldn't read the backup file."); }
+    };
+    r.readAsText(f);
+    e.target.value="";
+  });
+
+  // ---- lock screen wiring ----
+  var lockEl=document.getElementById("lock");
+  function showLock(){
+    var setup=!hasVault();
+    document.getElementById("lockTitle").textContent = setup ? "Create a passcode" : "Enter passcode";
+    document.getElementById("lockSub").textContent = setup ? "Set a code to protect your hours on this device." : "Unlock to see your hours.";
+    document.getElementById("lockPass2").hidden = !setup;
+    document.getElementById("lockBtn").textContent = setup ? "Create passcode" : "Unlock";
+    document.getElementById("lockReset").hidden = setup;
+    document.getElementById("lockErr").textContent="";
+    document.getElementById("lockPass").value="";
+    document.getElementById("lockPass2").value="";
+    lockEl.hidden=false;
+    setTimeout(function(){ document.getElementById("lockPass").focus(); },50);
+  }
+  function finishUnlock(){
+    document.getElementById("lockPass").value="";
+    document.getElementById("lockPass2").value="";
+    lockEl.hidden=true;
+    render(); refreshHistory();
+  }
+  function submitLock(){
+    var err=document.getElementById("lockErr");
+    var pass=document.getElementById("lockPass").value;
+    err.textContent="";
+    if(!hasVault()){
+      var p2=document.getElementById("lockPass2").value;
+      if(pass.length<4){ err.textContent="Use at least 4 characters."; return; }
+      if(pass!==p2){ err.textContent="Codes don't match."; return; }
+      setupPasscode(pass).then(finishUnlock).catch(function(){ err.textContent="Couldn't set up. Try again."; });
+    }else{
+      if(!pass){ err.textContent="Enter your passcode."; return; }
+      var btn=document.getElementById("lockBtn"); btn.disabled=true;
+      unlock(pass).then(function(ok){
+        btn.disabled=false;
+        if(ok){ finishUnlock(); }
+        else{ err.textContent="Wrong passcode."; document.getElementById("lockPass").select(); }
+      });
+    }
+  }
+  document.getElementById("lockBtn").onclick=submitLock;
+  document.getElementById("lockPass").addEventListener("keydown",function(e){ if(e.key==="Enter") submitLock(); });
+  document.getElementById("lockPass2").addEventListener("keydown",function(e){ if(e.key==="Enter") submitLock(); });
+  document.getElementById("lockReset").onclick=function(){
+    if(!confirm("This erases all saved hours on this device and lets you set a new code. Continue?")) return;
+    try{ localStorage.removeItem(SECURE_KEY); localStorage.removeItem(OLD_KEY); }catch(e){}
+    cryptoKey=null; data=null; showLock();
+  };
+  document.getElementById("lockNow").onclick=function(){ cryptoKey=null; showLock(); };
+  document.getElementById("changePass").onclick=function(){
+    var a=prompt("New passcode (at least 4 characters):"); if(a==null) return;
+    if(a.length<4){ alert("Too short — use at least 4 characters."); return; }
+    var b=prompt("Repeat the new passcode:"); if(b==null) return;
+    if(a!==b){ alert("Codes don't match."); return; }
+    changePasscode(a).then(function(){ alert("Passcode updated."); });
+  };
+
+  // ---- boot ----
+  if(!subtle){
+    // No Web Crypto (e.g. insecure context): run without encryption.
+    save=function(){ try{ localStorage.setItem(OLD_KEY, JSON.stringify(data)); }catch(e){} };
+    data = legacyData() || defaultData();
+    lockEl.hidden=true;
+    render();
+  }else{
+    showLock();
+  }
+})();
+</script>
+</body>
+</html>
