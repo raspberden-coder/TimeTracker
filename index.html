@@ -244,6 +244,10 @@
   .lock-reset[hidden]{display:none}
 
   footer{color:var(--muted);font-size:12px;margin-top:22px;line-height:1.55}
+  .sync{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--muted);min-height:16px;margin:2px 2px 0;text-align:right}
+  .sync.ok{color:var(--ok)}
+  .sync.warn{color:var(--over)}
+  .sync.muted{color:var(--muted)}
   footer code{font-family:var(--mono);background:var(--surface);padding:1px 5px;border-radius:5px;border:1px solid var(--line)}
   input[type=file]{display:none}
 
@@ -307,6 +311,8 @@
     <button class="btn" id="lockNow">Lock</button>
   </div>
 
+  <div class="sync" id="syncStatus"></div>
+
   <div class="panel" id="editor" hidden>
     <h2>Projects &amp; targets</h2>
     <div id="editList"></div>
@@ -321,9 +327,9 @@
   </div>
 
   <footer>
-    Data lives in your browser's <code>localStorage</code>. Make a Backup now and then —
-    you can Restore it on another device. To run it yourself: put <code>index.html</code>
-    in a repo and enable GitHub Pages (Settings → Pages).
+    Your hours sync to the cloud, encrypted with your passcode. Open this page on any device,
+    enter the same code, and your data loads automatically. Backup exports an unencrypted copy —
+    keep that file somewhere safe.
   </footer>
 </div>
 
@@ -334,18 +340,31 @@
   var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   var PALETTE = ["#0F6E6E","#6B4FE0","#C77A00","#C7443E","#2E7D32","#0E6BA8","#B0338C","#3C5A99"];
 
-  // ---- secure storage (passcode-encrypted at rest) ----
+  // ---- secure storage (passcode-encrypted at rest, synced via Supabase) ----
   var SECURE_KEY = "time-tracker-secure";
   var OLD_KEY = STORAGE_KEY;   // legacy plaintext, migrated on first setup
   var ITER = 150000;
   var cryptoKey = null;        // in-memory session key (never stored)
   var saltBytes = null;
+  var vaultId = null;          // derived from passcode; identifies the cloud row
   var data = null;             // populated only after unlock
+
+  // Supabase sync config (publishable key is public by design)
+  var SB_URL = "https://obhthcezdcrhgojmvqis.supabase.co";
+  var SB_KEY = "sb_publishable_4GOZYtLlnKUU4W7UUyyn9g_crVDa0Ex";
+  var SB_REST = SB_URL + "/rest/v1/vault";
+  var SYNC_ON = SB_URL.indexOf("http")===0 && SB_KEY.length>10;
+  function sbHeaders(extra){
+    var h={ "apikey":SB_KEY, "Authorization":"Bearer "+SB_KEY, "Content-Type":"application/json" };
+    if(extra) for(var k in extra) h[k]=extra[k];
+    return h;
+  }
 
   var subtle = (window.crypto && window.crypto.subtle) ? window.crypto.subtle : null;
   var te = new TextEncoder(), td = new TextDecoder();
   function b64(buf){ var b=new Uint8Array(buf), s=""; for(var i=0;i<b.length;i++) s+=String.fromCharCode(b[i]); return btoa(s); }
   function unb64(str){ var s=atob(str), a=new Uint8Array(s.length); for(var i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; }
+  function hex(buf){ return Array.prototype.map.call(new Uint8Array(buf),function(x){return ("0"+x.toString(16)).slice(-2);}).join(""); }
 
   function deriveKey(passcode, salt, iter){
     return subtle.importKey("raw", te.encode(passcode), "PBKDF2", false, ["deriveKey"])
@@ -355,18 +374,49 @@
           base, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
       });
   }
+  // vault id depends only on the passcode, so any device can find the same row
+  function makeVaultId(passcode){
+    return subtle.digest("SHA-256", te.encode("time-tracker::"+passcode)).then(hex);
+  }
   function hasVault(){ try{ return !!localStorage.getItem(SECURE_KEY); }catch(e){ return false; } }
   function legacyData(){ try{ var o=JSON.parse(localStorage.getItem(OLD_KEY)); return (o&&o.projects)?o:null; }catch(e){ return null; } }
+
+  // ---- sync status pill ----
+  function setSync(state){
+    var el=document.getElementById("syncStatus"); if(!el) return;
+    var map={ ok:["Synced","ok"], saving:["Saving…","muted"], syncing:["Syncing…","muted"], offline:["Offline — saved on device","warn"], off:["",""] };
+    var m=map[state]||map.off;
+    el.textContent=m[0]; el.className="sync "+(m[1]||"");
+  }
+
+  function cloudPull(){
+    if(!SYNC_ON || !vaultId) return Promise.resolve(null);
+    return fetch(SB_REST+"?id=eq."+vaultId+"&select=blob", { headers: sbHeaders() })
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(rows){ return (rows && rows[0]) ? rows[0].blob : null; })
+      .catch(function(){ return null; });
+  }
+  function cloudPush(blobStr){
+    if(!SYNC_ON || !vaultId) return Promise.resolve();
+    setSync("saving");
+    return fetch(SB_REST+"?on_conflict=id", {
+      method:"POST",
+      headers: sbHeaders({ "Prefer":"resolution=merge-duplicates" }),
+      body: JSON.stringify({ id: vaultId, blob: blobStr, updated_at: new Date().toISOString() })
+    }).then(function(r){ setSync(r.ok?"ok":"offline"); }).catch(function(){ setSync("offline"); });
+  }
 
   var saveChain = Promise.resolve();
   function save(){
     if(!cryptoKey) return;
+    data._mtime = Date.now();
     var snapshot = JSON.stringify(data);
     saveChain = saveChain.then(function(){
       var iv = window.crypto.getRandomValues(new Uint8Array(12));
       return subtle.encrypt({name:"AES-GCM", iv:iv}, cryptoKey, te.encode(snapshot)).then(function(ct){
-        var blob = {v:1, salt:b64(saltBytes), iter:ITER, iv:b64(iv), ct:b64(ct)};
-        try{ localStorage.setItem(SECURE_KEY, JSON.stringify(blob)); }catch(e){}
+        var blobStr = JSON.stringify({v:1, salt:b64(saltBytes), iter:ITER, iv:b64(iv), ct:b64(ct)});
+        try{ localStorage.setItem(SECURE_KEY, blobStr); }catch(e){}
+        return cloudPush(blobStr);
       });
     }).catch(function(){});
   }
@@ -383,28 +433,53 @@
       entries:{}
     };
   }
-  function unlock(passcode){
-    var blob; try{ blob=JSON.parse(localStorage.getItem(SECURE_KEY)); }catch(e){ return Promise.resolve(false); }
-    saltBytes = unb64(blob.salt); ITER = blob.iter;
-    return deriveKey(passcode, saltBytes, ITER).then(function(key){
+  // Decrypt one blob string with a passcode; resolves to {data,key,salt,iter} or null
+  function tryDecrypt(blobStr, passcode){
+    var blob; try{ blob=JSON.parse(blobStr); }catch(e){ return Promise.resolve(null); }
+    var salt=unb64(blob.salt);
+    return deriveKey(passcode, salt, blob.iter).then(function(key){
       return subtle.decrypt({name:"AES-GCM", iv:unb64(blob.iv)}, key, unb64(blob.ct)).then(function(pt){
-        data = JSON.parse(td.decode(pt)); cryptoKey = key; return true;
+        return { data: JSON.parse(td.decode(pt)), key: key, salt: salt, iter: blob.iter };
       });
-    }).catch(function(){ return false; });
+    }).catch(function(){ return null; });
   }
-  function setupPasscode(passcode){
-    saltBytes = window.crypto.getRandomValues(new Uint8Array(16)); ITER = 150000;
-    return deriveKey(passcode, saltBytes, ITER).then(function(key){
-      cryptoKey = key;
-      data = legacyData() || defaultData();
-      save();
-      try{ localStorage.removeItem(OLD_KEY); }catch(e){}
-      return true;
-    });
+  // Open the vault: reconcile local + cloud, newest wins. Resolves 'ok' | 'wrong' | 'new'
+  function openWith(passcode){
+    return makeVaultId(passcode).then(function(id){
+      vaultId=id;
+      var localBlob=null; try{ localBlob=localStorage.getItem(SECURE_KEY); }catch(e){}
+      setSync("syncing");
+      return cloudPull().then(function(cloudBlob){
+        return Promise.all([
+          localBlob ? tryDecrypt(localBlob,passcode) : null,
+          cloudBlob ? tryDecrypt(cloudBlob,passcode) : null
+        ]).then(function(res){
+          var loc=res[0], cld=res[1];
+          if((localBlob||cloudBlob) && !loc && !cld){ setSync("off"); return "wrong"; }
+          if(!localBlob && !cloudBlob){
+            // brand new: create fresh vault
+            saltBytes=window.crypto.getRandomValues(new Uint8Array(16)); ITER=150000;
+            return deriveKey(passcode,saltBytes,ITER).then(function(key){
+              cryptoKey=key; data=legacyData()||defaultData();
+              try{ localStorage.removeItem(OLD_KEY); }catch(e){}
+              save(); return "new";
+            });
+          }
+          var pick = (!cld) ? loc : (!loc ? cld : ((loc.data._mtime||0) >= (cld.data._mtime||0) ? loc : cld));
+          data=pick.data; cryptoKey=pick.key; saltBytes=pick.salt; ITER=pick.iter;
+          try{ localStorage.removeItem(OLD_KEY); }catch(e){}
+          save();   // converge both sides
+          return "ok";
+        });
+      });
+    }).catch(function(){ setSync("offline"); return "error"; });
   }
   function changePasscode(passcode){
-    saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
-    return deriveKey(passcode, saltBytes, ITER).then(function(key){ cryptoKey = key; save(); return true; });
+    return makeVaultId(passcode).then(function(id){
+      vaultId=id;
+      saltBytes=window.crypto.getRandomValues(new Uint8Array(16));
+      return deriveKey(passcode,saltBytes,ITER).then(function(key){ cryptoKey=key; save(); return true; });
+    });
   }
 
   // ---- date helpers ----
@@ -687,12 +762,15 @@
   // ---- lock screen wiring ----
   var lockEl=document.getElementById("lock");
   function showLock(){
-    var setup=!hasVault();
-    document.getElementById("lockTitle").textContent = setup ? "Create a passcode" : "Enter passcode";
-    document.getElementById("lockSub").textContent = setup ? "Set a code to protect your hours on this device." : "Unlock to see your hours.";
-    document.getElementById("lockPass2").hidden = !setup;
-    document.getElementById("lockBtn").textContent = setup ? "Create passcode" : "Unlock";
-    document.getElementById("lockReset").hidden = setup;
+    var fresh=!hasVault();
+    document.getElementById("lockTitle").textContent = "Enter passcode";
+    document.getElementById("lockSub").textContent = fresh
+      ? "New device? Enter your existing code to load your data. First time ever? This sets your code."
+      : "Unlock to see your hours.";
+    document.getElementById("lockPass2").hidden = !fresh;
+    document.getElementById("lockPass2").placeholder = "Repeat passcode (new setup only)";
+    document.getElementById("lockBtn").textContent = "Unlock";
+    document.getElementById("lockReset").hidden = false;
     document.getElementById("lockErr").textContent="";
     document.getElementById("lockPass").value="";
     document.getElementById("lockPass2").value="";
@@ -709,41 +787,42 @@
     var err=document.getElementById("lockErr");
     var pass=document.getElementById("lockPass").value;
     err.textContent="";
-    if(!hasVault()){
+    if(!pass){ err.textContent="Enter your passcode."; return; }
+    // If there's no local vault, a second field lets you safely set a brand-new code.
+    if(!hasVault() && !document.getElementById("lockPass2").hidden){
       var p2=document.getElementById("lockPass2").value;
       if(pass.length<4){ err.textContent="Use at least 4 characters."; return; }
-      if(pass!==p2){ err.textContent="Codes don't match."; return; }
-      setupPasscode(pass).then(finishUnlock).catch(function(){ err.textContent="Couldn't set up. Try again."; });
-    }else{
-      if(!pass){ err.textContent="Enter your passcode."; return; }
-      var btn=document.getElementById("lockBtn"); btn.disabled=true;
-      unlock(pass).then(function(ok){
-        btn.disabled=false;
-        if(ok){ finishUnlock(); }
-        else{ err.textContent="Wrong passcode."; document.getElementById("lockPass").select(); }
-      });
+      if(p2 && pass!==p2){ err.textContent="Codes don't match."; return; }
     }
+    var btn=document.getElementById("lockBtn"); btn.disabled=true; err.textContent="Checking…";
+    openWith(pass).then(function(res){
+      btn.disabled=false; err.textContent="";
+      if(res==="ok" || res==="new"){ finishUnlock(); }
+      else if(res==="wrong"){ err.textContent="Wrong passcode."; document.getElementById("lockPass").select(); }
+      else{ err.textContent="Network problem — check your connection and try again."; }
+    });
   }
   document.getElementById("lockBtn").onclick=submitLock;
   document.getElementById("lockPass").addEventListener("keydown",function(e){ if(e.key==="Enter") submitLock(); });
   document.getElementById("lockPass2").addEventListener("keydown",function(e){ if(e.key==="Enter") submitLock(); });
   document.getElementById("lockReset").onclick=function(){
-    if(!confirm("This erases all saved hours on this device and lets you set a new code. Continue?")) return;
+    if(!confirm("This clears the copy saved on THIS device and lets you enter a code again. Your cloud data stays and will reload when you enter the right code. Continue?")) return;
     try{ localStorage.removeItem(SECURE_KEY); localStorage.removeItem(OLD_KEY); }catch(e){}
-    cryptoKey=null; data=null; showLock();
+    cryptoKey=null; data=null; vaultId=null; showLock();
   };
-  document.getElementById("lockNow").onclick=function(){ cryptoKey=null; showLock(); };
+  document.getElementById("lockNow").onclick=function(){ cryptoKey=null; setSync("off"); showLock(); };
   document.getElementById("changePass").onclick=function(){
-    var a=prompt("New passcode (at least 4 characters):"); if(a==null) return;
+    var a=prompt("New passcode (at least 4 characters).\nNote: you'll need to enter the NEW code on every device."); if(a==null) return;
     if(a.length<4){ alert("Too short — use at least 4 characters."); return; }
     var b=prompt("Repeat the new passcode:"); if(b==null) return;
     if(a!==b){ alert("Codes don't match."); return; }
-    changePasscode(a).then(function(){ alert("Passcode updated."); });
+    changePasscode(a).then(function(){ alert("Passcode updated. Use the new code on your other devices too."); });
   };
 
   // ---- boot ----
   if(!subtle){
-    // No Web Crypto (e.g. insecure context): run without encryption.
+    // No Web Crypto (e.g. insecure context): run locally without encryption or sync.
+    SYNC_ON=false;
     save=function(){ try{ localStorage.setItem(OLD_KEY, JSON.stringify(data)); }catch(e){} };
     data = legacyData() || defaultData();
     lockEl.hidden=true;
